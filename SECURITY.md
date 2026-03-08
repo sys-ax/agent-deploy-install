@@ -1,75 +1,30 @@
-# Security
+# how it works
 
-## Key
+nothing runs unverified. ever.
 
-- Type: Ed25519
-- ID: SHA256:UWg7JA3vAQ2D/fN+tUUAzdkIhEoorKEY5KIbxrVlRE0
-- Owner: alejandroyu@github.com
+## the chain
 
-## Verification
+1. ed25519 sig on `install.sh` — key fingerprint pinned in the script itself
+2. sha256 checksums on all files
+3. `setup.sh` from the private repo checksummed before execution
+4. piped input (`curl | bash`) is downloaded to `/tmp`, verified, then `exec`d
 
-```bash
-ssh-keygen -Y verify -f signing-key.pub -I alejandroyu@github.com -n file -s install.sh.sig < install.sh
+no skip. no "continue anyway?". missing files get fetched and verified automatically.
+
+## verify yourself
+
+```
+shasum -a 256 -c CHECKSUMS.sha256
+ssh-keygen -lf signing-key.pub
+# expect: SHA256:UWg7JA3vAQ2D/fN+tUUAzdkIhEoorKEY5KIbxrVlRE0
 ```
 
-## Integrity
+## what else
 
-- Script auto-verifies own signature on startup
-- Signature in `install.sh.sig`
-- Public key in `signing-key.pub`
-- SHA256 checksums in `CHECKSUMS.sha256`
+- gh token scope audit — warns if you have more access than needed
+- install log at `~/.installer-log/`
+- `set -euo pipefail`, trap on EXIT/INT/TERM
 
-## Repo
+## found something?
 
-- All commits signed (Ed25519)
-- Releases tagged and signed
-- No force pushes allowed
-- Main branch protected
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| install.sh | Installer (84 lines, fully auditable) |
-| install.sh.sig | Ed25519 signature |
-| signing-key.pub | Public key for verification |
-| CHECKSUMS.sha256 | File integrity hashes |
-
-## Threat Model
-
-**Can detect:**
-- Script tampering
-- Man-in-the-middle attacks
-- Corrupted downloads
-- Unauthorized modifications
-
-**Cannot prevent:**
-- GitHub account compromise
-- Local machine compromise
-- DNS hijacking (unlikely with HTTPS)
-- User running without verification
-
-## Trust Chain
-
-1. Clone from github.com/alejandroyu2/tmux-setup-installme
-2. Script verifies its own signature
-3. Script checks GitHub authentication
-4. Script verifies access to private repo
-5. Script clones private repo
-6. Runs setup.sh
-
-## Hardening
-
-✅ Ed25519 signature verification
-✅ Auto-verify on startup
-✅ Signed commits (Git)
-✅ Signed release tags
-✅ SHA256 checksums
-✅ Source code audit (84 lines)
-✅ No embedded secrets
-✅ Generic key name (no username)
-
-## Version
-
-v1.1 (2026-03-08)
-Tag: [v1.1](https://github.com/alejandroyu2/tmux-setup-installme/releases/tag/v1.1)
+open an issue or reach out directly. don't post exploits publicly.
