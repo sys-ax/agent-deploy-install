@@ -1,8 +1,26 @@
 # Tmux Setup Installer
 
-Secure installer for the private `tmux-setup` repository.
+Secure installer for the private `tmux-setup` repository. **Cryptographically signed by @alejandroyu.**
 
 ## Quick Install
+
+### Verify Signature (Recommended)
+
+```bash
+# Download files
+curl -fsSL -O https://raw.githubusercontent.com/alejandroyu2/tmux-setup-installme/main/install.sh
+curl -fsSL -O https://raw.githubusercontent.com/alejandroyu2/tmux-setup-installme/main/install.sh.sig
+curl -fsSL -O https://raw.githubusercontent.com/alejandroyu2/tmux-setup-installme/main/alejandroyu.pub
+
+# Verify signature (checks it's from @alejandroyu)
+ssh-keygen -Y verify -f alejandroyu.pub -I alejandroyu@github.com -n file -s install.sh.sig < install.sh
+
+# If signature is valid: "Good "file" signature verified"
+# Then run:
+bash install.sh
+```
+
+### Or Run Directly (Trust Mode)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/alejandroyu2/tmux-setup-installme/main/install.sh | bash
@@ -26,14 +44,36 @@ curl -fsSL https://raw.githubusercontent.com/alejandroyu2/tmux-setup-installme/m
 
 ## Security
 
-This is more secure than typical `curl | bash`:
+### Signature Verification
 
-✅ **Public and auditable** - Anyone can review this script
-✅ **No embedded secrets** - No tokens or passwords in code
-✅ **GitHub auth verification** - Checks you have access before installing
-✅ **Private repo only** - Only installs from your private repository
+✅ **Cryptographically signed** - Ed25519 key signed by @alejandroyu
+✅ **Public key included** - `alejandroyu.pub` verifies authenticity
+✅ **Tamper detection** - Signature fails if script is modified
+✅ **GitHub verified** - Linked to alejandroyu GitHub account
+
+### Why This Matters
+
+- **Without signature**: Script could be intercepted/modified
+- **With signature**: Only script signed by @alejandroyu's key will verify
+- **You choose**: Verify before running, or trust and run directly
+
+## Key Details
+
+- **Key Type**: Ed25519 (NSA Suite B recommended, strongest modern cryptography)
+- **Key ID**: `SHA256:UWg7JA3vAQ2D/fN+tUUAzdkIhEoorKEY5KIbxrVlRE0`
+- **Owner**: alejandroyu@github.com
+- **Usage**: Signing installer releases
 
 ## Troubleshooting
+
+**"Signature verification failed"**
+- Script was modified (integrity check failed)
+- Key mismatch (wrong public key)
+- Download corruption (try again)
+
+**"Good signature verified"**
+- ✅ Script is authentic and unmodified
+- ✅ Safe to run
 
 **"GitHub CLI not found"**
 ```bash
@@ -57,7 +97,10 @@ This entire script is 100 lines and 100% visible. Read it before running.
 curl -fsSL https://raw.githubusercontent.com/alejandroyu2/tmux-setup-installme/main/install.sh
 ```
 
-Then execute when you're confident.
+View the public signing key:
+```bash
+curl -fsSL https://raw.githubusercontent.com/alejandroyu2/tmux-setup-installme/main/alejandroyu.pub
+```
 
 ---
 
