@@ -1,0 +1,94 @@
+#!/bin/bash
+# Tmux Setup Installer - Minimal Public Script
+# This script downloads and installs from the private tmux-setup repository
+#
+# Usage: curl -fsSL https://raw.githubusercontent.com/alejandroyu2/tmux-setup-installme/main/install.sh | bash
+#
+# What this script does:
+# 1. Checks for GitHub CLI (gh)
+# 2. Verifies GitHub authentication
+# 3. Verifies access to alejandroyu2/tmux-setup (private repo)
+# 4. Clones alejandroyu2/tmux-setup
+# 5. Runs its setup.sh script
+#
+# NO passwords collected. NO tokens embedded. NO external dependencies.
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Configuration
+PRIVATE_REPO="alejandroyu2/tmux-setup"
+INSTALLER_REPO="alejandroyu2/tmux-setup-installme"
+
+echo -e "${CYAN}╔════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║${NC}   ${BLUE}Tmux Setup Installer${NC}                       ${CYAN}║${NC}"
+echo -e "${CYAN}║${NC}   Secure installer for private repo          ${CYAN}║${NC}"
+echo -e "${CYAN}╚════════════════════════════════════════════════╝${NC}\n"
+
+# Step 1: Check GitHub CLI
+echo -e "${BLUE}[1/4]${NC} Checking GitHub CLI..."
+if ! command -v gh &> /dev/null; then
+  echo -e "  ${RED}✗${NC} GitHub CLI not found\n"
+  echo "Install GitHub CLI:"
+  echo -e "  ${YELLOW}brew install gh${NC}\n"
+  echo "Then authenticate:"
+  echo -e "  ${YELLOW}gh auth login${NC}\n"
+  exit 1
+fi
+GH_VERSION=$(gh --version | head -1)
+echo -e "  ${GREEN}✓${NC} GitHub CLI: $GH_VERSION"
+
+# Step 2: Check GitHub authentication
+echo -e "\n${BLUE}[2/4]${NC} Checking GitHub authentication..."
+if ! gh auth status &>/dev/null; then
+  echo -e "  ${RED}✗${NC} Not authenticated with GitHub\n"
+  echo "Authenticate with:"
+  echo -e "  ${YELLOW}gh auth login${NC}\n"
+  exit 1
+fi
+AUTH_USER=$(gh api user -q '.login')
+echo -e "  ${GREEN}✓${NC} Authenticated as: $AUTH_USER"
+
+# Step 3: Verify access to private repo
+echo -e "\n${BLUE}[3/4]${NC} Verifying access to $PRIVATE_REPO..."
+if ! gh repo view "$PRIVATE_REPO" &>/dev/null; then
+  echo -e "  ${RED}✗${NC} No access to $PRIVATE_REPO\n"
+  echo "You need access to the private repository."
+  echo "Request access at:"
+  echo -e "  ${YELLOW}https://github.com/$PRIVATE_REPO${NC}\n"
+  exit 1
+fi
+REPO_VISIBILITY=$(gh api "repos/$PRIVATE_REPO" -q '.visibility')
+echo -e "  ${GREEN}✓${NC} Access verified (repo: $REPO_VISIBILITY)"
+
+# Step 4: Clone and install
+echo -e "\n${BLUE}[4/4]${NC} Cloning and installing...\n"
+
+TEMP_DIR=$(mktemp -d)
+trap "rm -rf $TEMP_DIR" EXIT
+
+if ! gh repo clone "$PRIVATE_REPO" "$TEMP_DIR/tmux-setup" -- --depth 1 2>/dev/null; then
+  echo -e "${RED}✗${NC} Failed to clone $PRIVATE_REPO"
+  exit 1
+fi
+
+cd "$TEMP_DIR/tmux-setup"
+
+# Run the setup script
+bash setup.sh
+
+echo -e "\n${CYAN}╔════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║${NC}   ${GREEN}✓ Installation Complete!${NC}                   ${CYAN}║${NC}"
+echo -e "${CYAN}╚════════════════════════════════════════════════╝${NC}\n"
+
+echo -e "Your tmux-setup is ready to use!"
+echo -e "Configured connections are available immediately.\n"
+
+connections-list 2>/dev/null || echo "Run: source ~/.zshrc"
