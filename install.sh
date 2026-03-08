@@ -23,14 +23,14 @@ readonly REPO_RAW="https://raw.githubusercontent.com/${INSTALLER_REPO}/main"
 # Expected SHA256 of setup.sh inside the private repo.
 # Update this value every time setup.sh changes.
 # Generate with: shasum -a 256 setup.sh
-readonly SETUP_SH_CHECKSUM="932339c63e13054f41bbadb937446999811fc11f4584abddd3bde5c3b83dbc49"
+readonly SETUP_SH_CHECKSUM="f71bf332ad9e6afcad438e790a6f71888eef695858ae07fe904c3c3646d2c1f8"
 
 # Minimum required files from the public installer repo
 readonly REQUIRED_FILES="install.sh install.sh.sig CHECKSUMS.sha256"
 
 # Expected SHA256 of SCRIPTS-CHECKSUMS.sha256 inside the private repo.
 # Covers all scripts in scripts/ and config/.tmux.conf.
-readonly SCRIPTS_CHECKSUMS_HASH="1774921e2a6ced51c7805f6dc490abcdf55d14d1ceeaace77f0c5030836817f9"
+readonly SCRIPTS_CHECKSUMS_HASH="665a76f4e024c9273f258f4de5a289959519c383da5898d218204864ab7fabb5"
 
 # Token scopes considered safe for this operation (read-only repo access)
 readonly SAFE_SCOPES="repo read:org"
