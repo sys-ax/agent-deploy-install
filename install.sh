@@ -23,16 +23,21 @@ readonly REPO_RAW="https://raw.githubusercontent.com/${INSTALLER_REPO}/main"
 # Expected SHA256 of setup.sh inside the private repo.
 # Update this value every time setup.sh changes.
 # Generate with: shasum -a 256 setup.sh
-readonly SETUP_SH_CHECKSUM="94330c64eb27caff166e276e5f9045172c89378e110771a2e4015ae2683dbf88"
+readonly SETUP_SH_CHECKSUM="3058690b7c26d8213ca3d475abd6dfa60601c0030afb4112a65acd1d109f4242"
 
 # Minimum required files from the public installer repo
-readonly REQUIRED_FILES="install.sh install.sh.sig signing-key.pub CHECKSUMS.sha256"
+readonly REQUIRED_FILES="install.sh install.sh.sig CHECKSUMS.sha256"
+
+# Expected SHA256 of SCRIPTS-CHECKSUMS.sha256 inside the private repo.
+# Covers all scripts in scripts/ and config/.tmux.conf.
+readonly SCRIPTS_CHECKSUMS_HASH="1774921e2a6ced51c7805f6dc490abcdf55d14d1ceeaace77f0c5030836817f9"
 
 # Token scopes considered safe for this operation (read-only repo access)
 readonly SAFE_SCOPES="repo read:org"
 
-# Known signing key fingerprint for pinning
+# Known signing key — embedded, no external file to tamper with
 readonly SIGNING_KEY_FINGERPRINT="SHA256:UWg7JA3vAQ2D/fN+tUUAzdkIhEoorKEY5KIbxrVlRE0"
+readonly SIGNING_KEY_PUB="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFcPGvazuR4B71kc4d6aAWqi35EY9cSBwLKKSvxuidnA alejandroyu@github.com"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # COLORS
@@ -129,33 +134,37 @@ verify_key_fingerprint() {
   log "INFO" "Signing key fingerprint verified: $actual_fp"
 }
 
-# Verify install.sh against its SSH signature using the pinned public key.
+# Verify install.sh against its SSH signature using the embedded public key.
 # This function NEVER offers to skip or continue without verification.
 verify_script_signature() {
   local script_path="$1"
   local sig_path="$2"
-  local key_path="$3"
+
+  # Write embedded key to temp file for ssh-keygen
+  local key_file
+  key_file="$(mktemp)"
+  echo "$SIGNING_KEY_PUB" > "$key_file"
 
   # Verify key fingerprint first (key pinning)
-  verify_key_fingerprint "$key_path"
+  verify_key_fingerprint "$key_file"
 
   # Build the allowed signers file that ssh-keygen requires
   local allowed_signers
   allowed_signers="$(mktemp)"
-  echo "${SIGNING_KEY_ID} $(cat "$key_path")" > "$allowed_signers"
+  echo "${SIGNING_KEY_ID} ${SIGNING_KEY_PUB}" > "$allowed_signers"
 
-  log "INFO" "Verifying signature: script=$script_path sig=$sig_path key=$key_path"
+  log "INFO" "Verifying signature: script=$script_path sig=$sig_path"
 
   if ssh-keygen -Y verify \
     -f "$allowed_signers" \
     -I "$SIGNING_KEY_ID" \
     -n file \
     -s "$sig_path" < "$script_path" &>/dev/null; then
-    rm -f "$allowed_signers"
+    rm -f "$allowed_signers" "$key_file"
     log "INFO" "Signature verification PASSED"
     return 0
   else
-    rm -f "$allowed_signers"
+    rm -f "$allowed_signers" "$key_file"
     log "FATAL" "Signature verification FAILED"
     return 1
   fi
@@ -224,12 +233,11 @@ handle_piped_execution() {
   verify_checksums "$dl_dir"
   say "  ${GREEN}OK${NC}  All checksums verified"
 
-  # Verify the script signature
+  # Verify the script signature (uses embedded key, no file needed)
   say "    Verifying signature..."
   if ! verify_script_signature \
       "${dl_dir}/install.sh" \
-      "${dl_dir}/install.sh.sig" \
-      "${dl_dir}/signing-key.pub"; then
+      "${dl_dir}/install.sh.sig"; then
     die "Signature verification failed on downloaded script.\n    The script may have been tampered with in transit."
   fi
   say "  ${GREEN}OK${NC}  Script signature verified\n"
@@ -315,6 +323,21 @@ verify_setup_script() {
   say "  ${GREEN}OK${NC}  setup.sh checksum verified ($actual_hash)"
   log "INFO" "setup.sh checksum verified: $actual_hash"
 
+  # Verify SCRIPTS-CHECKSUMS.sha256 integrity
+  local scripts_checksums_path
+  scripts_checksums_path="$(dirname "$setup_path")/SCRIPTS-CHECKSUMS.sha256"
+  if [ -f "$scripts_checksums_path" ]; then
+    local scripts_hash
+    scripts_hash="$(shasum -a 256 "$scripts_checksums_path" | awk '{print $1}')"
+    if [ "$scripts_hash" != "$SCRIPTS_CHECKSUMS_HASH" ]; then
+      die "SCRIPTS-CHECKSUMS.sha256 checksum mismatch!\n    Expected: ${SCRIPTS_CHECKSUMS_HASH}\n    Got:      ${scripts_hash}\n    Script checksums may have been tampered with."
+    fi
+    say "  ${GREEN}OK${NC}  Script checksums file verified ($scripts_hash)"
+    log "INFO" "SCRIPTS-CHECKSUMS.sha256 verified: $scripts_hash"
+  else
+    die "SCRIPTS-CHECKSUMS.sha256 not found in cloned repository.\n    The private repo may be missing integrity files."
+  fi
+
   # Log the file details for forensic purposes
   local file_size file_lines
   file_size="$(wc -c < "$setup_path" | tr -d ' ')"
@@ -356,13 +379,12 @@ log "INFO" "Step 0: Script signature verification"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_PATH="${SCRIPT_DIR}/install.sh"
 SIG_PATH="${SCRIPT_DIR}/install.sh.sig"
-KEY_PATH="${SCRIPT_DIR}/signing-key.pub"
 CHECKSUMS_PATH="${SCRIPT_DIR}/CHECKSUMS.sha256"
 
 # If signature files are missing, download them from the repo.
 # No prompt, no skip — they are required.
 MISSING_FILES=0
-for required in install.sh.sig signing-key.pub CHECKSUMS.sha256; do
+for required in install.sh.sig CHECKSUMS.sha256; do
   if [ ! -f "${SCRIPT_DIR}/${required}" ]; then
     MISSING_FILES=1
     break
@@ -373,7 +395,7 @@ if [ "$MISSING_FILES" -eq 1 ]; then
   say "  Signature files not found locally. Downloading from repo..."
   log "INFO" "Downloading missing signature files from $REPO_RAW"
 
-  for required in install.sh.sig signing-key.pub CHECKSUMS.sha256; do
+  for required in install.sh.sig CHECKSUMS.sha256; do
     if [ ! -f "${SCRIPT_DIR}/${required}" ]; then
       if ! curl -fsSL --max-time 30 --retry 2 \
           "${REPO_RAW}/${required}" -o "${SCRIPT_DIR}/${required}" 2>/dev/null; then
@@ -389,8 +411,8 @@ fi
 verify_checksums "$SCRIPT_DIR"
 say "  ${GREEN}OK${NC}  File checksums verified"
 
-# Verify the script signature — no fallback, no bypass
-if ! verify_script_signature "$SCRIPT_PATH" "$SIG_PATH" "$KEY_PATH"; then
+# Verify the script signature — uses embedded key, no external file
+if ! verify_script_signature "$SCRIPT_PATH" "$SIG_PATH"; then
   die "Script signature verification FAILED.\n    This script may have been modified or corrupted.\n    Re-download from: https://github.com/${INSTALLER_REPO}"
 fi
 say "  ${GREEN}OK${NC}  Script signature verified (Ed25519)"
