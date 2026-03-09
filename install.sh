@@ -1,8 +1,8 @@
 #!/bin/bash
-# curl -fsSL https://raw.githubusercontent.com/sys-ax/tmux-setup-installme/main/install.sh | bash
+# curl -fsSL https://raw.githubusercontent.com/sys-ax/agent-deploy-install/main/install.sh | bash
 set -euo pipefail
 
-echo "tmux-setup installer"
+echo "agent-deploy installer"
 echo ""
 
 # gh required
@@ -20,5 +20,5 @@ fi
 # clone + run
 T=$(mktemp -d)
 trap "rm -rf '$T'" EXIT
-gh repo clone sys-ax/tmux-setup "$T/tmux-setup" -- --depth 1 2>/dev/null || { echo "No access to sys-ax/tmux-setup"; exit 1; }
-exec bash "$T/tmux-setup/install.sh"
+gh repo clone sys-ax/agent-deploy "$T/agent-deploy" -- --depth 1 2>/dev/null || { echo "No access to sys-ax/agent-deploy"; exit 1; }
+exec bash "$T/agent-deploy/install.sh"
