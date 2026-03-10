@@ -2,12 +2,35 @@
 # curl -fsSL https://raw.githubusercontent.com/sys-ax/agent-deploy-install/main/install.sh | bash
 set -euo pipefail
 
-echo "agent-deploy installer"
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+TOTAL=3
+_bar() {
+  local step=$1 label=$2
+  local pct=$(( step * 100 / TOTAL ))
+  local width=30
+  local filled=$(( pct * width / 100 ))
+  local rem=$(( (pct * width * 8 / 100) % 8 ))
+  local empty=$(( width - filled - (rem > 0 ? 1 : 0) ))
+  local partials=( " " "▏" "▎" "▍" "▌" "▋" "▊" "▉" )
+  local bar="${GREEN}"
+  for ((i=0; i<filled; i++)); do bar+="█"; done
+  if (( rem > 0 )); then bar+="${partials[$rem]}"; fi
+  bar+="${NC}"
+  for ((i=0; i<empty; i++)); do bar+=" "; done
+  printf "\r  ${BOLD}[${NC}${bar}${BOLD}]${NC} ${BOLD}%3d%%${NC}  ${CYAN}[%d/%d]${NC} %-40s\n" "$pct" "$step" "$TOTAL" "$label"
+}
+
+echo ""
+echo -e "  ${BOLD}agent-deploy installer${NC}"
 echo ""
 
-# ─── Install gh if missing ───────────────────────────────────────────────────
+# ─── Step 1: Install gh if missing ─────────────────────────────────────────
 if ! command -v gh &>/dev/null; then
-  echo "GitHub CLI not found. Installing..."
+  _bar 0 "Installing GitHub CLI..."
   if [[ "$(uname)" == "Darwin" ]]; then
     if command -v brew &>/dev/null; then
       brew install gh
@@ -16,7 +39,6 @@ if ! command -v gh &>/dev/null; then
       exit 1
     fi
   elif [[ "$(uname)" == "Linux" ]]; then
-    # Try system install (root/sudo), fall back to standalone binary in ~/.local/bin
     _can_root() { [ "$(id -u)" -eq 0 ] || command -v sudo &>/dev/null; }
     _run() { if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi; }
 
@@ -36,7 +58,7 @@ if ! command -v gh &>/dev/null; then
 
     # Fallback: standalone binary to ~/.local/bin (no root needed)
     if ! command -v gh &>/dev/null; then
-      echo "No root access. Installing gh standalone to ~/.local/bin..."
+      echo "  No root access. Installing gh standalone to ~/.local/bin..."
       ARCH=$(uname -m)
       case "$ARCH" in
         x86_64)  ARCH="amd64" ;;
@@ -53,34 +75,41 @@ if ! command -v gh &>/dev/null; then
         && chmod +x "$HOME/.local/bin/gh" \
         && rm -rf "$T_GH"
       export PATH="$HOME/.local/bin:$PATH"
-      echo "Installed gh $(gh --version | head -1) to ~/.local/bin/gh"
     fi
 
     if ! command -v gh &>/dev/null; then
-      echo "Could not install gh. Install manually: https://cli.github.com"
+      echo "  Could not install gh. Install manually: https://cli.github.com"
       exit 1
     fi
   else
-    echo "Unsupported OS. Install gh manually: https://cli.github.com"
+    echo "  Unsupported OS. Install gh manually: https://cli.github.com"
     exit 1
   fi
-  echo ""
+  _bar 1 "GitHub CLI installed"
+else
+  _bar 1 "GitHub CLI found"
 fi
 
-# ─── Auth if not logged in ───────────────────────────────────────────────────
+# ─── Step 2: Auth if not logged in ─────────────────────────────────────────
 if ! gh auth status &>/dev/null; then
-  echo "Not logged in to GitHub. Starting device auth flow..."
+  _bar 1 "Authenticating with GitHub..."
   echo ""
   gh auth login --hostname github.com --git-protocol https --web 2>&1
   echo ""
   if ! gh auth status &>/dev/null; then
-    echo "Authentication failed."
+    echo "  Authentication failed."
     exit 1
   fi
+  _bar 2 "GitHub authenticated"
+else
+  _bar 2 "GitHub authenticated"
 fi
 
-# ─── Clone + run ─────────────────────────────────────────────────────────────
+# ─── Step 3: Clone + run ───────────────────────────────────────────────────
+_bar 2 "Cloning agent-deploy..."
 T=$(mktemp -d)
 trap "rm -rf '$T'" EXIT
-gh repo clone sys-ax/agent-deploy "$T/agent-deploy" -- --depth 1 2>/dev/null || { echo "No access to sys-ax/agent-deploy"; exit 1; }
+gh repo clone sys-ax/agent-deploy "$T/agent-deploy" -- --depth 1 2>/dev/null || { echo "  No access to sys-ax/agent-deploy"; exit 1; }
+_bar 3 "Launching installer"
+echo ""
 exec bash "$T/agent-deploy/install.sh"
