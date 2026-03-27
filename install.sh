@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eo pipefail
 
 G='\033[0;32m' R='\033[0;31m' B='\033[1m' N='\033[0m'
 C=$(tput cols 2>/dev/null || echo 80)
